@@ -29,6 +29,7 @@ Source: https://docs.kalshi.com/getting_started/quick_start_authenticated_reques
 3. Authenticated portfolio reads: balance, positions, orders, fills, API limits.
 4. Trading through the V2 event-market order endpoint `/portfolio/events/orders`.
 5. Retry/backoff for `429` rate-limit responses. `GET` requests may also retry transient `5xx` responses.
+6. Order lifecycle helpers: get by order ID, find by client order ID, queue positions, batch cancel, and cancel all matching resting orders.
 
 Sources:
 
@@ -54,6 +55,7 @@ Source: https://docs.kalshi.com/getting_started/fixed_point_migration
 4. Private channels: `user_orders`, `fill`, `market_positions`.
 5. `OrderbookStream` state manager using snapshots and deltas with sequence validation.
 6. Reconnect and resubscribe workflow.
+7. Normalized event parsing for `user_order`, `fill`, and `market_position` messages.
 
 Sources:
 
@@ -67,3 +69,7 @@ Sources:
 Keep default tests offline by injecting fake transports. Cover URL construction, query encoding, signature paths, fixed-point formatting, retry behavior, order request bodies, WebSocket command JSON, and orderbook snapshot/delta behavior.
 
 Live tests live under `tests/integration/` and are guarded by environment variables so they cannot place demo orders during normal builds.
+
+## Packaging and CI
+
+The default GitHub Actions workflow runs `buildtool` only. Toolbox packaging is reproducible through `buildtool package`, which stages distributable files and writes `release/matlab-kalshi.mltbx` while excluding credentials and test fixtures.

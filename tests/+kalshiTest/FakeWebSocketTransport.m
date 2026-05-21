@@ -5,6 +5,7 @@ classdef FakeWebSocketTransport < handle
         Sent = {}
         Messages = {}
         IsConnected = false
+        ConnectCount (1, 1) double {mustBeInteger, mustBeNonnegative} = 0
     end
 
     methods
@@ -18,6 +19,7 @@ classdef FakeWebSocketTransport < handle
 
         function connect(obj)
             obj.IsConnected = true;
+            obj.ConnectCount = obj.ConnectCount + 1;
         end
 
         function send(obj, payload)

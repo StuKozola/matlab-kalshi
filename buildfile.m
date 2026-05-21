@@ -22,3 +22,9 @@ function integrationTestTask(~)
     results = runtests(fullfile("tests", "integration"));
     assertSuccess(results);
 end
+
+function packageTask(~)
+%packageTask Package matlab-kalshi into release/matlab-kalshi.mltbx.
+
+    run(fullfile("tools", "packageToolbox.m"));
+end

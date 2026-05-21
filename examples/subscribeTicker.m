@@ -11,7 +11,7 @@ ws.connect();
 
 client = kalshi.Client(config);
 markets = client.getMarkets(Status="open", Limit=1);
-ticker = string(markets.markets(1).ticker);
+ticker = string(markets.markets{1}.ticker);
 ws.subscribe("ticker", MarketTickers=ticker);
 
 message = ws.receive(Timeout=10);

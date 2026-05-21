@@ -16,6 +16,7 @@ classdef WebSocketClient < handle
 
     properties (Access = private)
         Subscriptions
+        SubscriptionSpecs
     end
 
     methods
@@ -30,6 +31,7 @@ classdef WebSocketClient < handle
             obj.Signer = options.Signer;
             obj.Transport = options.Transport;
             obj.Subscriptions = containers.Map("KeyType", "double", "ValueType", "any");
+            obj.SubscriptionSpecs = {};
         end
 
         function connect(obj)
@@ -65,6 +67,7 @@ classdef WebSocketClient < handle
             end
 
             commandId = obj.sendCommand("subscribe", params);
+            obj.SubscriptionSpecs{end + 1} = params;
         end
 
         function commandId = unsubscribe(obj, sids)
@@ -99,6 +102,23 @@ classdef WebSocketClient < handle
             commandId = obj.sendCommand("update_subscription", params);
         end
 
+        function commandIds = resubscribe(obj)
+            %resubscribe Replay remembered subscribe commands on the current connection.
+            obj.assertConnected();
+            commandIds = zeros(numel(obj.SubscriptionSpecs), 1);
+
+            for k = 1:numel(obj.SubscriptionSpecs)
+                commandIds(k) = obj.sendCommand("subscribe", obj.SubscriptionSpecs{k});
+            end
+        end
+
+        function commandIds = reconnect(obj)
+            %reconnect Reopen the transport and replay remembered subscriptions.
+            obj.close();
+            obj.connect();
+            commandIds = obj.resubscribe();
+        end
+
         function message = receive(obj, options)
             %receive Read one message from the transport and decode JSON.
             arguments
@@ -120,6 +140,17 @@ classdef WebSocketClient < handle
 
             obj.recordMessage(message);
             obj.dispatchMessage(message);
+        end
+
+        function event = receiveEvent(obj, options)
+            %receiveEvent Receive one message and return a normalized event envelope.
+            arguments
+                obj (1, 1) kalshi.WebSocketClient
+                options.Timeout (1, 1) double {mustBeNonnegative} = 0
+            end
+
+            message = obj.receive(Timeout=options.Timeout);
+            event = kalshi.parseWebSocketMessage(message);
         end
 
         function close(obj)

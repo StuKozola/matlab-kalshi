@@ -149,6 +149,27 @@ classdef Client < handle
             query.limit = options.Limit;
             query.cursor = options.Cursor;
             data = obj.get("/markets", Query=kalshi.internal.dropEmptyFields(query));
+            data = kalshi.internal.normalizeResponseList(data, "markets");
+        end
+
+        function data = getMarketsTable(obj, options)
+            %getMarketsTable Return market list results as a MATLAB table.
+            arguments
+                obj (1, 1) kalshi.Client
+                options.SeriesTicker (1, 1) string = ""
+                options.Status (1, 1) string = ""
+                options.Limit double = []
+                options.Cursor (1, 1) string = ""
+                options.Query struct = struct()
+            end
+
+            response = obj.getMarkets( ...
+                SeriesTicker=options.SeriesTicker, ...
+                Status=options.Status, ...
+                Limit=options.Limit, ...
+                Cursor=options.Cursor, ...
+                Query=options.Query);
+            data = kalshi.toTable(response.markets);
         end
 
         function data = getMarket(obj, ticker)
@@ -185,6 +206,75 @@ classdef Client < handle
             data = obj.get("/portfolio/balance", Authenticated=true);
         end
 
+        function data = getOrder(obj, orderId)
+            %getOrder Retrieve a single order by exchange order ID.
+            arguments
+                obj (1, 1) kalshi.Client
+                orderId (1, 1) string
+            end
+
+            data = obj.get("/portfolio/orders/" + orderId, Authenticated=true);
+        end
+
+        function order = getOrderByClientOrderId(obj, clientOrderId, options)
+            %getOrderByClientOrderId Find an order by locally generated client order ID.
+            arguments
+                obj (1, 1) kalshi.Client
+                clientOrderId (1, 1) string
+                options.Status (1, 1) string = ""
+                options.Ticker (1, 1) string = ""
+                options.Limit (1, 1) double {mustBeInteger, mustBePositive} = 100
+                options.MaxPages (1, 1) double {mustBeInteger, mustBePositive} = 20
+            end
+
+            query = struct( ...
+                "status", options.Status, ...
+                "ticker", options.Ticker, ...
+                "limit", options.Limit);
+            orders = obj.getAll("/portfolio/orders", "orders", ...
+                Query=kalshi.internal.dropEmptyFields(query), ...
+                Authenticated=true, ...
+                MaxPages=options.MaxPages);
+            orders = kalshi.normalizeList(orders);
+            order = [];
+
+            for k = 1:numel(orders)
+                candidate = orders{k};
+                if isfield(candidate, "client_order_id") && string(candidate.client_order_id) == clientOrderId
+                    order = candidate;
+                    return
+                end
+            end
+        end
+
+        function data = getOrderQueuePosition(obj, orderId)
+            %getOrderQueuePosition Retrieve price-time queue position for one resting order.
+            arguments
+                obj (1, 1) kalshi.Client
+                orderId (1, 1) string
+            end
+
+            data = obj.get("/portfolio/orders/" + orderId + "/queue_position", Authenticated=true);
+        end
+
+        function data = getQueuePositions(obj, options)
+            %getQueuePositions Retrieve queue positions for resting orders.
+            arguments
+                obj (1, 1) kalshi.Client
+                options.MarketTickers string = strings(0, 1)
+                options.EventTicker (1, 1) string = ""
+                options.Subaccount double = []
+            end
+
+            query = struct( ...
+                "market_tickers", strjoin(options.MarketTickers(:)', ","), ...
+                "event_ticker", options.EventTicker, ...
+                "subaccount", options.Subaccount);
+            data = obj.get("/portfolio/orders/queue_positions", ...
+                Query=kalshi.internal.dropEmptyFields(query), Authenticated=true);
+            data = kalshi.internal.normalizeResponseList(data, "queue_positions");
+        end
+
         function data = getPositions(obj, options)
             arguments
                 obj (1, 1) kalshi.Client
@@ -192,6 +282,23 @@ classdef Client < handle
             end
 
             data = obj.get("/portfolio/positions", Query=options.Query, Authenticated=true);
+            data = kalshi.internal.normalizeResponseList(data, "market_positions");
+            data = kalshi.internal.normalizeResponseList(data, "event_positions");
+        end
+
+        function data = getPositionsTable(obj, options)
+            %getPositionsTable Return market position results as a MATLAB table.
+            arguments
+                obj (1, 1) kalshi.Client
+                options.Query struct = struct()
+            end
+
+            response = obj.getPositions(Query=options.Query);
+            if isfield(response, "market_positions")
+                data = kalshi.toTable(response.market_positions);
+            else
+                data = table();
+            end
         end
 
         function data = getOrders(obj, options)
@@ -201,6 +308,18 @@ classdef Client < handle
             end
 
             data = obj.get("/portfolio/orders", Query=options.Query, Authenticated=true);
+            data = kalshi.internal.normalizeResponseList(data, "orders");
+        end
+
+        function data = getOrdersTable(obj, options)
+            %getOrdersTable Return order list results as a MATLAB table.
+            arguments
+                obj (1, 1) kalshi.Client
+                options.Query struct = struct()
+            end
+
+            response = obj.getOrders(Query=options.Query);
+            data = kalshi.toTable(response.orders);
         end
 
         function data = getFills(obj, options)
@@ -210,6 +329,18 @@ classdef Client < handle
             end
 
             data = obj.get("/portfolio/fills", Query=options.Query, Authenticated=true);
+            data = kalshi.internal.normalizeResponseList(data, "fills");
+        end
+
+        function data = getFillsTable(obj, options)
+            %getFillsTable Return fill list results as a MATLAB table.
+            arguments
+                obj (1, 1) kalshi.Client
+                options.Query struct = struct()
+            end
+
+            response = obj.getFills(Query=options.Query);
+            data = kalshi.toTable(response.fills);
         end
 
         function data = getApiLimits(obj)
@@ -271,6 +402,69 @@ classdef Client < handle
                 "exchange_index", options.ExchangeIndex);
             data = obj.delete("/portfolio/events/orders/" + orderId, ...
                 Query=kalshi.internal.dropEmptyFields(query), Authenticated=true);
+        end
+
+        function data = batchCancelOrders(obj, orderIds, options)
+            %batchCancelOrders Cancel multiple event-market orders through the V2 endpoint.
+            arguments
+                obj (1, 1) kalshi.Client
+                orderIds string
+                options.Subaccount (1, 1) double {mustBeInteger, mustBeNonnegative} = 0
+                options.ExchangeIndex (1, 1) double {mustBeInteger, mustBeNonnegative} = 0
+            end
+
+            obj.assertTradingAllowed();
+            orderIds = orderIds(:);
+            orders = repmat(struct( ...
+                "order_id", "", ...
+                "subaccount", options.Subaccount, ...
+                "exchange_index", options.ExchangeIndex), numel(orderIds), 1);
+
+            for k = 1:numel(orderIds)
+                orders(k).order_id = orderIds(k);
+            end
+
+            body = struct("orders", orders);
+            data = obj.delete("/portfolio/events/orders/batched", ...
+                Body=body, Authenticated=true);
+            data = kalshi.internal.normalizeResponseList(data, "orders");
+        end
+
+        function data = cancelAllOrders(obj, options)
+            %cancelAllOrders Cancel all resting orders matching the supplied filters.
+            arguments
+                obj (1, 1) kalshi.Client
+                options.Ticker (1, 1) string = ""
+                options.Limit (1, 1) double {mustBeInteger, mustBePositive} = 100
+                options.MaxPages (1, 1) double {mustBeInteger, mustBePositive} = 20
+                options.Subaccount (1, 1) double {mustBeInteger, mustBeNonnegative} = 0
+                options.ExchangeIndex (1, 1) double {mustBeInteger, mustBeNonnegative} = 0
+            end
+
+            obj.assertTradingAllowed();
+            query = struct("status", "resting", "ticker", options.Ticker, "limit", options.Limit);
+            orders = obj.getAll("/portfolio/orders", "orders", ...
+                Query=kalshi.internal.dropEmptyFields(query), ...
+                Authenticated=true, ...
+                MaxPages=options.MaxPages);
+            orders = kalshi.normalizeList(orders);
+            orderIds = strings(0, 1);
+
+            for k = 1:numel(orders)
+                order = orders{k};
+                if isfield(order, "order_id")
+                    orderIds(end + 1, 1) = string(order.order_id); %#ok<AGROW>
+                end
+            end
+
+            if isempty(orderIds)
+                data = struct("orders", {cell(0, 1)});
+                return
+            end
+
+            data = obj.batchCancelOrders(orderIds, ...
+                Subaccount=options.Subaccount, ...
+                ExchangeIndex=options.ExchangeIndex);
         end
     end
 

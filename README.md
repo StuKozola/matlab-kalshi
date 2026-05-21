@@ -20,6 +20,7 @@ Add the package to the MATLAB path:
 addpath("src")
 client = kalshi.Client(kalshi.Config.demo());
 markets = client.getMarkets(Status="open", Limit=5);
+marketsTable = client.getMarketsTable(Status="open", Limit=20);
 ```
 
 Authenticated requests require a Kalshi API key ID and RSA private key path:
@@ -89,3 +90,17 @@ matlab -batch "buildtool integrationTest"
 ```
 
 REST requests retry `429` with exponential backoff. `GET` requests also retry transient `5xx` responses; write requests do not retry `5xx` by default.
+
+## Packaging
+
+Create an installable toolbox file:
+
+```matlab
+buildtool package
+```
+
+The packaging script stages only distributable files under `build/` and writes `release/matlab-kalshi.mltbx`. Secrets, tests, Git metadata, and local `.env` files are excluded.
+
+## CI
+
+GitHub Actions runs the default offline `buildtool` task on pushes and pull requests. Live integration tests are intentionally manual because they require credentials and, for trading coverage, explicit demo order-placement flags.

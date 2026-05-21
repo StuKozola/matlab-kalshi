@@ -38,6 +38,41 @@ classdef tClientRequests < matlab.unittest.TestCase
             testCase.verifyEqual(request.Headers{1, 1}, "KALSHI-ACCESS-KEY");
         end
 
+        function testGetOrderUsesPortfolioOrderEndpoint(testCase)
+            client = kalshi.Client(kalshi.Config.demo(), ...
+                Signer=kalshiTest.FakeSigner(), Transport=@identityTransport);
+
+            request = client.getOrder("order-123");
+
+            testCase.verifyEqual(request.Method, "GET");
+            testCase.verifyEqual(request.Endpoint, "/portfolio/orders/order-123");
+            testCase.verifyTrue(request.Authenticated);
+        end
+
+        function testGetOrderByClientOrderIdScansPages(testCase)
+            transport = kalshiTest.PagedOrdersTransport();
+            client = kalshi.Client(kalshi.Config.demo(), ...
+                Signer=kalshiTest.FakeSigner(), ...
+                Transport=@(request) transport.handleRequest(request));
+
+            order = client.getOrderByClientOrderId("client-2", MaxPages=2);
+
+            testCase.verifyEqual(string(order.order_id), "order-2");
+            testCase.verifyEqual(numel(transport.Requests), 2);
+        end
+
+        function testBatchCancelOrdersUsesV2Endpoint(testCase)
+            client = kalshi.Client(kalshi.Config.demo(), ...
+                Signer=kalshiTest.FakeSigner(), Transport=@identityTransport);
+
+            request = client.batchCancelOrders(["order-1"; "order-2"]);
+
+            testCase.verifyEqual(request.Method, "DELETE");
+            testCase.verifyEqual(request.Endpoint, "/portfolio/events/orders/batched");
+            testCase.verifyEqual(numel(request.Body.orders), 2);
+            testCase.verifyEqual(string(request.Body.orders(1).order_id), "order-1");
+        end
+
         function testProductionTradingRequiresExplicitOptIn(testCase)
             client = kalshi.Client(kalshi.Config.production(), ...
                 Signer=kalshiTest.FakeSigner(), Transport=@identityTransport);
