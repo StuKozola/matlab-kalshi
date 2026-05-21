@@ -6,10 +6,6 @@ classdef AuthSigner < handle
         PrivateKeyPath (1, 1) string
     end
 
-    properties (Access = private)
-        PrivateKey
-    end
-
     methods
         function obj = AuthSigner(apiKeyId, privateKeyPath)
             arguments
@@ -59,46 +55,20 @@ classdef AuthSigner < handle
                 message (1, 1) string
             end
 
-            try
-                privateKey = obj.loadPrivateKey();
-                hashes = py.importlib.import_module("cryptography.hazmat.primitives.hashes");
-                padding = py.importlib.import_module("cryptography.hazmat.primitives.asymmetric.padding");
-                base64 = py.importlib.import_module("base64");
+            if ~isfile(obj.PrivateKeyPath)
+                error("kalshi:AuthSigner:PrivateKeyNotFound", ...
+                    "Private key file not found: %s", obj.PrivateKeyPath);
+            end
 
-                messageBytes = py.str(char(message)).encode("utf-8");
-                pssPadding = padding.PSS( ...
-                    pyargs("mgf", padding.MGF1(hashes.SHA256()), ...
-                    "salt_length", padding.PSS.DIGEST_LENGTH));
-                rawSignature = privateKey.sign(messageBytes, pssPadding, hashes.SHA256());
-                signature = string(base64.b64encode(rawSignature).decode("utf-8"));
+            try
+                module = loadPythonAuthBackend();
+                signature = string(module.sign_pem(char(obj.PrivateKeyPath), char(message)));
             catch exception
                 throwAsCaller(MException( ...
                     "kalshi:AuthSigner:SigningFailed", ...
                     "Unable to sign Kalshi request. Ensure Python and the cryptography package can load the private key at '%s'. Original error: %s", ...
                     obj.PrivateKeyPath, exception.message));
             end
-        end
-    end
-
-    methods (Access = private)
-        function privateKey = loadPrivateKey(obj)
-            if ~isempty(obj.PrivateKey)
-                privateKey = obj.PrivateKey;
-                return
-            end
-
-            if ~isfile(obj.PrivateKeyPath)
-                error("kalshi:AuthSigner:PrivateKeyNotFound", ...
-                    "Private key file not found: %s", obj.PrivateKeyPath);
-            end
-
-            serialization = py.importlib.import_module("cryptography.hazmat.primitives.serialization");
-            builtins = py.importlib.import_module("builtins");
-            fileHandle = builtins.open(char(obj.PrivateKeyPath), "rb");
-            cleanup = onCleanup(@() fileHandle.close());
-            keyData = fileHandle.read();
-            obj.PrivateKey = serialization.load_pem_private_key(keyData, py.None);
-            privateKey = obj.PrivateKey;
         end
     end
 
@@ -157,6 +127,26 @@ classdef AuthSigner < handle
             else
                 path = string(regexprep(tokens.path, "/+$", ""));
             end
+        end
+    end
+end
+
+function module = loadPythonAuthBackend()
+    helperFolder = fullfile(fileparts(mfilename("fullpath")), "+internal", "python");
+    if ~pythonPathContains(helperFolder)
+        insert(py.sys.path, int32(0), helperFolder);
+    end
+
+    module = py.importlib.import_module("kalshi_auth");
+end
+
+function tf = pythonPathContains(folder)
+    tf = false;
+    pythonPath = py.sys.path;
+    for k = 1:int64(length(pythonPath))
+        if string(pythonPath{k}) == string(folder)
+            tf = true;
+            return
         end
     end
 end

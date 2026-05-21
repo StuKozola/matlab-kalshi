@@ -93,6 +93,40 @@ classdef Config
                 PrivateKeyPath=string(getenv("KALSHI_PRIVATE_KEY_PATH")));
         end
 
+        function obj = fromDotEnv(fileName, options)
+            %fromDotEnv Create configuration from a local .env file.
+            arguments
+                fileName (1, 1) string = ".env"
+                options.PrivateKeyPath (1, 1) string = ""
+            end
+
+            if ~isfile(fileName)
+                error("kalshi:Config:DotEnvNotFound", ...
+                    "Dotenv file not found: %s", fileName);
+            end
+
+            values = readDotEnv(fileName);
+            environment = lower(getDotEnvValue(values, "KALSHI_ENV", "demo"));
+            privateKeyPath = getDotEnvValue(values, "KALSHI_PRIVATE_KEY_PATH", options.PrivateKeyPath);
+
+            if strlength(privateKeyPath) == 0
+                dotEnvFolder = string(fileparts(fileName));
+                if strlength(dotEnvFolder) == 0
+                    dotEnvFolder = string(pwd);
+                end
+
+                candidatePath = fullfile(dotEnvFolder, "kalshi_private_key.pem");
+                if isfile(candidatePath)
+                    privateKeyPath = string(candidatePath);
+                end
+            end
+
+            obj = kalshi.Config( ...
+                Environment=environment, ...
+                ApiKeyId=getDotEnvValue(values, "KALSHI_API_KEY_ID", ""), ...
+                PrivateKeyPath=privateKeyPath);
+        end
+
         function baseUrl = defaultBaseUrl(environment)
             arguments
                 environment (1, 1) string {mustBeMember(environment, ["demo", "prod"])}
@@ -121,4 +155,34 @@ end
 
 function value = eraseBetweenTrailingSlash(value)
     value = regexprep(string(value), "/+$", "");
+end
+
+function values = readDotEnv(fileName)
+    lines = readlines(fileName);
+    values = struct();
+
+    for k = 1:numel(lines)
+        line = strtrim(lines(k));
+        if strlength(line) == 0 || startsWith(line, "#") || ~contains(line, "=")
+            continue
+        end
+
+        rawLine = char(line);
+        separatorIndex = find(rawLine == '=', 1);
+        name = string(strtrim(rawLine(1:separatorIndex - 1)));
+        value = string(strtrim(rawLine(separatorIndex + 1:end)));
+        value = strip(strip(value, '"'), "'");
+
+        if isvarname(name)
+            values.(name) = value;
+        end
+    end
+end
+
+function value = getDotEnvValue(values, name, defaultValue)
+    if isfield(values, name)
+        value = values.(name);
+    else
+        value = string(defaultValue);
+    end
 end

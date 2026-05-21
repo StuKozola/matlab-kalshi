@@ -85,8 +85,9 @@ end
 
 function tf = pythonPathContains(folder)
     tf = false;
-    for k = 1:int64(length(py.sys.path))
-        if string(py.sys.path{k}) == string(folder)
+    pythonPath = py.sys.path;
+    for k = 1:int64(length(pythonPath))
+        if string(pythonPath{k}) == string(folder)
             tf = true;
             return
         end

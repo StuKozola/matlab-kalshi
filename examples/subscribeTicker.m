@@ -1,14 +1,18 @@
 % subscribeTicker Subscribe to Kalshi ticker updates over WebSocket.
 
-addpath(fullfile(fileparts(mfilename("fullpath")), "..", "src"));
+repoRoot = fullfile(fileparts(mfilename("fullpath")), "..");
+addpath(fullfile(repoRoot, "src"));
 
-config = kalshi.Config.demo( ...
-    ApiKeyId=string(getenv("KALSHI_API_KEY_ID")), ...
-    PrivateKeyPath=string(getenv("KALSHI_PRIVATE_KEY_PATH")));
+config = kalshi.Config.fromDotEnv(fullfile(repoRoot, ".env"));
 
 ws = kalshi.WebSocketClient(config);
 cleanup = onCleanup(@() ws.close());
 ws.connect();
-ws.subscribe("ticker");
+
+client = kalshi.Client(config);
+markets = client.getMarkets(Status="open", Limit=1);
+ticker = string(markets.markets(1).ticker);
+ws.subscribe("ticker", MarketTickers=ticker);
+
 message = ws.receive(Timeout=10);
 disp(message)

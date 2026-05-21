@@ -47,8 +47,13 @@ class KalshiWebSocketTransport:
     def close(self):
         self.closed.set()
         if self.websocket is not None and self.loop is not None:
-            future = asyncio.run_coroutine_threadsafe(self.websocket.close(), self.loop)
-            future.result(timeout=self.timeout)
+            try:
+                future = asyncio.run_coroutine_threadsafe(
+                    self.websocket.close(), self.loop
+                )
+                future.result(timeout=min(self.timeout, 5.0))
+            except Exception:
+                pass
 
     def _thread_main(self):
         self.loop = asyncio.new_event_loop()

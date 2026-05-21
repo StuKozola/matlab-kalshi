@@ -33,5 +33,19 @@ classdef tConfig < matlab.unittest.TestCase
             testCase.verifyEqual(kalshi.formatPrice(0.56), "0.5600");
             testCase.verifyEqual(kalshi.formatCount(10), "10.00");
         end
+
+        function testFromDotEnvUsesLocalPemFallback(testCase)
+            fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
+            dotEnvPath = fullfile(fixture.Folder, ".env");
+            keyPath = fullfile(fixture.Folder, "kalshi_private_key.pem");
+            writelines("KALSHI_API_KEY_ID=test-key-id", dotEnvPath);
+            writelines("placeholder", keyPath);
+
+            config = kalshi.Config.fromDotEnv(dotEnvPath);
+
+            testCase.verifyEqual(config.Environment, "demo");
+            testCase.verifyEqual(config.ApiKeyId, "test-key-id");
+            testCase.verifyEqual(config.PrivateKeyPath, string(keyPath));
+        end
     end
 end

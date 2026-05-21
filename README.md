@@ -25,12 +25,12 @@ markets = client.getMarkets(Status="open", Limit=5);
 Authenticated requests require a Kalshi API key ID and RSA private key path:
 
 ```matlab
-config = kalshi.Config.demo( ...
-    ApiKeyId=getenv("KALSHI_API_KEY_ID"), ...
-    PrivateKeyPath=getenv("KALSHI_PRIVATE_KEY_PATH"));
+config = kalshi.Config.fromDotEnv();
 client = kalshi.Client(config);
 balance = client.getBalance();
 ```
+
+`Config.fromDotEnv()` reads `KALSHI_API_KEY_ID`, optional `KALSHI_ENV`, and optional `KALSHI_PRIVATE_KEY_PATH`. If no key path is set, it uses `kalshi_private_key.pem` beside `.env` when present.
 
 Production trading is disabled unless explicitly enabled:
 

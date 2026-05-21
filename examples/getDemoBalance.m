@@ -1,10 +1,9 @@
 % getDemoBalance Fetch demo account balance with authenticated REST.
 
-addpath(fullfile(fileparts(mfilename("fullpath")), "..", "src"));
+repoRoot = fullfile(fileparts(mfilename("fullpath")), "..");
+addpath(fullfile(repoRoot, "src"));
 
-config = kalshi.Config.demo( ...
-    ApiKeyId=string(getenv("KALSHI_API_KEY_ID")), ...
-    PrivateKeyPath=string(getenv("KALSHI_PRIVATE_KEY_PATH")));
+config = kalshi.Config.fromDotEnv(fullfile(repoRoot, ".env"));
 client = kalshi.Client(config);
 balance = client.getBalance();
 disp(balance)
