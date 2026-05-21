@@ -28,7 +28,7 @@ Source: https://docs.kalshi.com/getting_started/quick_start_authenticated_reques
 2. Cursor pagination helper for list endpoints.
 3. Authenticated portfolio reads: balance, positions, orders, fills, API limits.
 4. Trading through the V2 event-market order endpoint `/portfolio/events/orders`.
-5. Retry/backoff for `429` rate-limit responses.
+5. Retry/backoff for `429` rate-limit responses. `GET` requests may also retry transient `5xx` responses.
 
 Sources:
 
@@ -64,4 +64,6 @@ Sources:
 
 ## Testing
 
-Keep tests offline by injecting fake transports. Cover URL construction, query encoding, signature paths, fixed-point formatting, order request bodies, WebSocket command JSON, and orderbook snapshot/delta behavior.
+Keep default tests offline by injecting fake transports. Cover URL construction, query encoding, signature paths, fixed-point formatting, retry behavior, order request bodies, WebSocket command JSON, and orderbook snapshot/delta behavior.
+
+Live tests live under `tests/integration/` and are guarded by environment variables so they cannot place demo orders during normal builds.

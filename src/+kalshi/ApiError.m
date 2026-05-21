@@ -12,7 +12,8 @@ classdef ApiError
             end
 
             details = kalshi.ApiError.bodyToText(body);
-            error("kalshi:ApiError", ...
+            errorId = sprintf("kalshi:ApiError:Status%d", statusCode);
+            error(errorId, ...
                 "Kalshi API request failed (%d) for %s %s: %s", ...
                 statusCode, upper(method), url, details);
         end

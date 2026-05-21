@@ -73,3 +73,19 @@ Or from a shell:
 ```powershell
 matlab -batch "addpath('src'); results = runtests('tests'); assertSuccess(results)"
 ```
+
+`buildtool` runs the offline suite only:
+
+```powershell
+matlab -batch "buildtool"
+```
+
+Live demo integration tests are opt-in. Balance/WebSocket-style live checks require `KALSHI_RUN_INTEGRATION=true`; demo order placement/cancel additionally requires `KALSHI_RUN_TRADING_INTEGRATION=true`.
+
+```powershell
+$env:KALSHI_RUN_INTEGRATION="true"
+$env:KALSHI_RUN_TRADING_INTEGRATION="true"
+matlab -batch "buildtool integrationTest"
+```
+
+REST requests retry `429` with exponential backoff. `GET` requests also retry transient `5xx` responses; write requests do not retry `5xx` by default.

@@ -8,6 +8,9 @@ classdef Config
         ApiKeyId (1, 1) string = ""
         PrivateKeyPath (1, 1) string = ""
         Timeout (1, 1) double {mustBePositive} = 30
+        MaxRetries (1, 1) double {mustBeInteger, mustBeNonnegative} = 3
+        RetryBaseDelay (1, 1) double {mustBeNonnegative} = 0.25
+        RetryMaxDelay (1, 1) double {mustBeNonnegative} = 2
         EnableProductionTrading (1, 1) logical = false
     end
 
@@ -20,6 +23,9 @@ classdef Config
                 options.ApiKeyId (1, 1) string = ""
                 options.PrivateKeyPath (1, 1) string = ""
                 options.Timeout (1, 1) double {mustBePositive} = 30
+                options.MaxRetries (1, 1) double {mustBeInteger, mustBeNonnegative} = 3
+                options.RetryBaseDelay (1, 1) double {mustBeNonnegative} = 0.25
+                options.RetryMaxDelay (1, 1) double {mustBeNonnegative} = 2
                 options.EnableProductionTrading (1, 1) logical = false
             end
 
@@ -38,6 +44,9 @@ classdef Config
             obj.ApiKeyId = options.ApiKeyId;
             obj.PrivateKeyPath = options.PrivateKeyPath;
             obj.Timeout = options.Timeout;
+            obj.MaxRetries = options.MaxRetries;
+            obj.RetryBaseDelay = options.RetryBaseDelay;
+            obj.RetryMaxDelay = options.RetryMaxDelay;
             obj.EnableProductionTrading = options.EnableProductionTrading;
         end
 
@@ -54,13 +63,19 @@ classdef Config
                 options.ApiKeyId (1, 1) string = ""
                 options.PrivateKeyPath (1, 1) string = ""
                 options.Timeout (1, 1) double {mustBePositive} = 30
+                options.MaxRetries (1, 1) double {mustBeInteger, mustBeNonnegative} = 3
+                options.RetryBaseDelay (1, 1) double {mustBeNonnegative} = 0.25
+                options.RetryMaxDelay (1, 1) double {mustBeNonnegative} = 2
             end
 
             obj = kalshi.Config( ...
                 Environment="demo", ...
                 ApiKeyId=options.ApiKeyId, ...
                 PrivateKeyPath=options.PrivateKeyPath, ...
-                Timeout=options.Timeout);
+                Timeout=options.Timeout, ...
+                MaxRetries=options.MaxRetries, ...
+                RetryBaseDelay=options.RetryBaseDelay, ...
+                RetryMaxDelay=options.RetryMaxDelay);
         end
 
         function obj = production(options)
@@ -69,6 +84,9 @@ classdef Config
                 options.ApiKeyId (1, 1) string = ""
                 options.PrivateKeyPath (1, 1) string = ""
                 options.Timeout (1, 1) double {mustBePositive} = 30
+                options.MaxRetries (1, 1) double {mustBeInteger, mustBeNonnegative} = 3
+                options.RetryBaseDelay (1, 1) double {mustBeNonnegative} = 0.25
+                options.RetryMaxDelay (1, 1) double {mustBeNonnegative} = 2
                 options.EnableProductionTrading (1, 1) logical = false
             end
 
@@ -77,6 +95,9 @@ classdef Config
                 ApiKeyId=options.ApiKeyId, ...
                 PrivateKeyPath=options.PrivateKeyPath, ...
                 Timeout=options.Timeout, ...
+                MaxRetries=options.MaxRetries, ...
+                RetryBaseDelay=options.RetryBaseDelay, ...
+                RetryMaxDelay=options.RetryMaxDelay, ...
                 EnableProductionTrading=options.EnableProductionTrading);
         end
 

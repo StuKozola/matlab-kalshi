@@ -4,9 +4,9 @@ function data = httpRequest(request)
     import matlab.net.URI
     import matlab.net.http.HeaderField
     import matlab.net.http.HTTPOptions
-    import matlab.net.http.MessageBody
     import matlab.net.http.RequestMessage
     import matlab.net.http.RequestMethod
+    import matlab.net.http.io.StringProvider
 
     method = upper(string(request.Method));
     headers = makeHeaderFields(request.Headers);
@@ -14,7 +14,7 @@ function data = httpRequest(request)
 
     if isfield(request, "Body") && ~isempty(request.Body)
         headers(end + 1) = HeaderField("Content-Type", "application/json");
-        body = MessageBody(jsonencode(request.Body));
+        body = StringProvider(jsonencode(request.Body));
     end
 
     response = RequestMessage(methodEnum(method), headers, body).send( ...

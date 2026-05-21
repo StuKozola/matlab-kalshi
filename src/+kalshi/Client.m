@@ -233,6 +233,7 @@ classdef Client < handle
                 options.ReduceOnly (1, 1) logical = false
                 options.Subaccount (1, 1) double {mustBeInteger, mustBeNonnegative} = 0
                 options.OrderGroupId (1, 1) string = ""
+                options.ExchangeIndex (1, 1) double {mustBeInteger, mustBeNonnegative} = 0
             end
 
             obj.assertTradingAllowed();
@@ -250,43 +251,67 @@ classdef Client < handle
                 "cancel_order_on_pause", options.CancelOrderOnPause, ...
                 "reduce_only", options.ReduceOnly, ...
                 "subaccount", options.Subaccount, ...
-                "order_group_id", options.OrderGroupId);
+                "order_group_id", options.OrderGroupId, ...
+                "exchange_index", options.ExchangeIndex);
             data = obj.post("/portfolio/events/orders", ...
                 kalshi.internal.dropEmptyFields(body), Authenticated=true);
         end
 
-        function data = cancelOrder(obj, orderId)
+        function data = cancelOrder(obj, orderId, options)
             arguments
                 obj (1, 1) kalshi.Client
                 orderId (1, 1) string
+                options.Subaccount double = []
+                options.ExchangeIndex double = []
             end
 
             obj.assertTradingAllowed();
-            data = obj.delete("/portfolio/events/orders/" + orderId, Authenticated=true);
+            query = struct( ...
+                "subaccount", options.Subaccount, ...
+                "exchange_index", options.ExchangeIndex);
+            data = obj.delete("/portfolio/events/orders/" + orderId, ...
+                Query=kalshi.internal.dropEmptyFields(query), Authenticated=true);
         end
     end
 
     methods (Access = private)
         function data = request(obj, method, endpoint, query, body, authenticated)
-            url = kalshi.internal.buildUrl(obj.Config.BaseUrl, endpoint, query);
-            headers = {};
+            maxAttempts = obj.Config.MaxRetries + 1;
 
-            if authenticated
-                signPath = kalshi.AuthSigner.requestPath(obj.Config.BaseUrl, endpoint);
-                headers = obj.ensureSigner().createHeaders(method, signPath);
+            for attempt = 1:maxAttempts
+                url = kalshi.internal.buildUrl(obj.Config.BaseUrl, endpoint, query);
+                headers = {};
+
+                if authenticated
+                    signPath = kalshi.AuthSigner.requestPath(obj.Config.BaseUrl, endpoint);
+                    headers = obj.ensureSigner().createHeaders(method, signPath);
+                end
+
+                requestData = struct( ...
+                    "Method", upper(method), ...
+                    "Url", url, ...
+                    "Endpoint", kalshi.internal.normalizeEndpoint(endpoint), ...
+                    "Query", query, ...
+                    "Headers", {headers}, ...
+                    "Body", body, ...
+                    "Timeout", obj.Config.Timeout, ...
+                    "Authenticated", authenticated, ...
+                    "Attempt", attempt);
+
+                try
+                    data = obj.Transport(requestData);
+                    return
+                catch exception
+                    if attempt >= maxAttempts || ~isRetryableException(exception, method)
+                        rethrow(exception)
+                    end
+
+                    delay = retryDelay(obj.Config, attempt);
+                    if delay > 0
+                        pause(delay);
+                    end
+                end
             end
-
-            requestData = struct( ...
-                "Method", upper(method), ...
-                "Url", url, ...
-                "Endpoint", kalshi.internal.normalizeEndpoint(endpoint), ...
-                "Query", query, ...
-                "Headers", {headers}, ...
-                "Body", body, ...
-                "Timeout", obj.Config.Timeout, ...
-                "Authenticated", authenticated);
-
-            data = obj.Transport(requestData);
         end
 
         function signer = ensureSigner(obj)
@@ -313,4 +338,29 @@ function items = appendItems(items, newItems)
     end
 
     items = [items; newItems(:)];
+end
+
+function tf = isRetryableException(exception, method)
+    statusCode = statusCodeFromException(exception);
+    retryableGetStatus = [429 500 502 503 504];
+
+    if upper(method) == "GET"
+        tf = any(statusCode == retryableGetStatus);
+    else
+        tf = statusCode == 429;
+    end
+end
+
+function statusCode = statusCodeFromException(exception)
+    tokens = regexp(exception.identifier, "kalshi:ApiError:Status(?<statusCode>\d+)$", "names");
+    if isempty(tokens)
+        statusCode = NaN;
+    else
+        statusCode = str2double(tokens.statusCode);
+    end
+end
+
+function delay = retryDelay(config, attempt)
+    delay = config.RetryBaseDelay * 2^(attempt - 1);
+    delay = min(delay, config.RetryMaxDelay);
 end
