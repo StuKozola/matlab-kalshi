@@ -10,19 +10,89 @@ classdef OrderbookStream < handle
             obj.Books = containers.Map("KeyType", "char", "ValueType", "any");
         end
 
-        function applyMessage(obj, message)
+        function status = applyMessage(obj, message)
             %applyMessage Apply an orderbook_snapshot or orderbook_delta message.
             arguments
                 obj (1, 1) kalshi.OrderbookStream
                 message (1, 1) struct
             end
 
+            status = struct( ...
+                "Type", "ignored", ...
+                "Ticker", "", ...
+                "CommandId", NaN);
             messageType = string(message.type);
             if messageType == "orderbook_snapshot"
                 obj.applySnapshot(message);
+                status.Type = "snapshot";
+                status.Ticker = string(message.msg.market_ticker);
             elseif messageType == "orderbook_delta"
                 obj.applyDelta(message);
+                status.Type = "delta";
+                status.Ticker = string(message.msg.market_ticker);
             end
+        end
+
+        function commandId = subscribe(obj, webSocketClient, marketTickers, options)
+            %subscribe Subscribe a WebSocket client to orderbook updates.
+            arguments
+                obj (1, 1) kalshi.OrderbookStream %#ok<INUSA>
+                webSocketClient (1, 1) kalshi.WebSocketClient
+                marketTickers string
+                options.UseYesPrice (1, 1) logical = true
+            end
+
+            commandId = webSocketClient.subscribe( ...
+                "orderbook_delta", ...
+                MarketTickers=marketTickers, ...
+                UseYesPrice=options.UseYesPrice);
+        end
+
+        function status = processMessage(obj, message, options)
+            %processMessage Apply one message and request resync on sequence gaps.
+            arguments
+                obj (1, 1) kalshi.OrderbookStream
+                message (1, 1) struct
+                options.WebSocketClient = []
+            end
+
+            try
+                status = obj.applyMessage(message);
+            catch exception
+                if exception.identifier ~= "kalshi:OrderbookStream:SequenceGap" || ...
+                        isempty(options.WebSocketClient)
+                    rethrow(exception)
+                end
+
+                status = obj.requestSnapshot(options.WebSocketClient, message);
+            end
+        end
+
+        function book = receiveBook(obj, webSocketClient, ticker, options)
+            %receiveBook Process messages until a current book is available.
+            arguments
+                obj (1, 1) kalshi.OrderbookStream
+                webSocketClient (1, 1) kalshi.WebSocketClient
+                ticker (1, 1) string
+                options.Timeout (1, 1) double {mustBeNonnegative} = 10
+                options.MaxMessages (1, 1) double {mustBeInteger, mustBePositive} = 50
+            end
+
+            for k = 1:options.MaxMessages
+                message = webSocketClient.receive(Timeout=options.Timeout);
+                if isempty(message)
+                    continue
+                end
+
+                obj.processMessage(message, WebSocketClient=webSocketClient);
+                if obj.hasBook(ticker)
+                    book = obj.getBook(ticker);
+                    return
+                end
+            end
+
+            error("kalshi:OrderbookStream:BookTimeout", ...
+                "No orderbook snapshot was received for %s.", ticker);
         end
 
         function applySnapshot(obj, message)
@@ -38,8 +108,13 @@ classdef OrderbookStream < handle
                 "no", containers.Map("KeyType", "char", "ValueType", "double"), ...
                 "seq", double(message.seq));
 
-            book.yes = loadLevels(book.yes, message.msg.yes_dollars_fp);
-            book.no = loadLevels(book.no, message.msg.no_dollars_fp);
+            if isfield(message.msg, "yes_dollars_fp")
+                book.yes = loadLevels(book.yes, message.msg.yes_dollars_fp);
+            end
+
+            if isfield(message.msg, "no_dollars_fp")
+                book.no = loadLevels(book.no, message.msg.no_dollars_fp);
+            end
             obj.Books(ticker) = book;
         end
 
@@ -91,6 +166,35 @@ classdef OrderbookStream < handle
                 "yes", mapToTable(rawBook.yes), ...
                 "no", mapToTable(rawBook.no));
         end
+
+        function tf = hasBook(obj, ticker)
+            %hasBook Return true when state exists for a market ticker.
+            arguments
+                obj (1, 1) kalshi.OrderbookStream
+                ticker (1, 1) string
+            end
+
+            tf = isKey(obj.Books, char(ticker));
+        end
+    end
+
+    methods (Access = private)
+        function status = requestSnapshot(~, webSocketClient, message)
+            ticker = string(message.msg.market_ticker);
+            if isfield(message, "sid")
+                commandId = webSocketClient.updateSubscription( ...
+                    double(message.sid), ...
+                    "get_snapshot", ...
+                    MarketTickers=ticker);
+            else
+                commandId = NaN;
+            end
+
+            status = struct( ...
+                "Type", "resync_requested", ...
+                "Ticker", ticker, ...
+                "CommandId", commandId);
+        end
     end
 end
 
@@ -104,16 +208,39 @@ function levels = loadLevels(levels, rawLevels)
             for k = 1:size(rawLevels, 1)
                 levels(char(string(rawLevels{k, 1}))) = str2double(string(rawLevels{k, 2}));
             end
+        elseif isFlattenedCellLevels(rawLevels)
+            midpoint = numel(rawLevels) / 2;
+            for k = 1:midpoint
+                levels(char(string(rawLevels{k}))) = str2double(string(rawLevels{k + midpoint}));
+            end
         else
             for k = 1:numel(rawLevels)
                 row = rawLevels{k};
-                levels(char(string(row{1}))) = str2double(string(row{2}));
+                [price, count] = rowValues(row);
+                levels(char(string(price))) = str2double(string(count));
             end
         end
     else
         for k = 1:size(rawLevels, 1)
             levels(char(string(rawLevels(k, 1)))) = str2double(string(rawLevels(k, 2)));
         end
+    end
+end
+
+function tf = isFlattenedCellLevels(rawLevels)
+    tf = size(rawLevels, 2) == 1 && ...
+        mod(numel(rawLevels), 2) == 0 && ...
+        ~isempty(rawLevels) && ...
+        ~iscell(rawLevels{1});
+end
+
+function [price, count] = rowValues(row)
+    if iscell(row)
+        price = row{1};
+        count = row{2};
+    else
+        price = row(1);
+        count = row(2);
     end
 end
 

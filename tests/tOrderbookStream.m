@@ -32,6 +32,36 @@ classdef tOrderbookStream < matlab.unittest.TestCase
             testCase.verifyEqual(book.yes.count_fp(book.yes.price_dollars == "0.5600"), 7);
         end
 
+        function testProcessMessageRequestsSnapshotOnSequenceGap(testCase)
+            stream = kalshi.OrderbookStream();
+            transport = kalshiTest.FakeWebSocketTransport();
+            ws = kalshi.WebSocketClient(kalshi.Config.demo(), Transport=transport);
+
+            ws.connect();
+            stream.applySnapshot(snapshotMessage());
+            status = stream.processMessage(deltaMessage(3, "yes", "0.5600", "-3.00"), ...
+                WebSocketClient=ws);
+
+            testCase.verifyEqual(status.Type, "resync_requested");
+            testCase.verifyEqual(status.Ticker, "KXTEST-26MAY21-T50");
+            testCase.verifyEqual(transport.Sent{1}.cmd, "update_subscription");
+            testCase.verifyEqual(transport.Sent{1}.params.action, "get_snapshot");
+            testCase.verifyEqual(string(transport.Sent{1}.params.market_tickers{1}), ...
+                "KXTEST-26MAY21-T50");
+        end
+
+        function testReceiveBookProcessesSnapshot(testCase)
+            stream = kalshi.OrderbookStream();
+            transport = kalshiTest.FakeWebSocketTransport(Messages={jsonencode(snapshotMessage())});
+            ws = kalshi.WebSocketClient(kalshi.Config.demo(), Transport=transport);
+
+            ws.connect();
+            book = stream.receiveBook(ws, "KXTEST-26MAY21-T50", Timeout=1, MaxMessages=1);
+
+            testCase.verifyEqual(book.seq, 1);
+            testCase.verifyEqual(book.yes.count_fp(book.yes.price_dollars == "0.5600"), 10);
+        end
+
         function testSequenceGapErrors(testCase)
             stream = kalshi.OrderbookStream();
 
@@ -47,6 +77,7 @@ end
 function message = snapshotMessage()
     message = struct( ...
         "type", "orderbook_snapshot", ...
+        "sid", 2, ...
         "seq", 1, ...
         "msg", struct( ...
             "market_ticker", "KXTEST-26MAY21-T50", ...
@@ -57,6 +88,7 @@ end
 function message = deltaMessage(sequenceNumber, side, price, delta)
     message = struct( ...
         "type", "orderbook_delta", ...
+        "sid", 2, ...
         "seq", sequenceNumber, ...
         "msg", struct( ...
             "market_ticker", "KXTEST-26MAY21-T50", ...

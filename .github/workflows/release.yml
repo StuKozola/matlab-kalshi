@@ -1,0 +1,74 @@
+name: MATLAB Toolbox Release
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create
+        required: true
+        default: v0.1.0
+      prerelease:
+        description: Mark the GitHub release as a prerelease
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  package-release:
+    name: Package and publish toolbox
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v2
+        with:
+          release: R2024b
+
+      - name: Run offline build
+        uses: matlab-actions/run-build@v2
+
+      - name: Package toolbox
+        uses: matlab-actions/run-command@v2
+        with:
+          command: buildtool package
+
+      - name: Upload toolbox artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: matlab-kalshi
+          path: release/matlab-kalshi.mltbx
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          Initial matlab-kalshi release.
+
+          Highlights:
+          - REST market data and table helpers.
+          - Authenticated portfolio reads.
+          - Demo trading create/cancel workflows.
+          - WebSocket subscribe, reconnect/resubscribe, event parsing, and orderbook state helpers.
+          - Installable MATLAB toolbox packaging.
+          EOF
+
+          args=()
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "$RELEASE_TAG" release/matlab-kalshi.mltbx \
+            --title "$RELEASE_TAG" \
+            --notes-file release-notes.md \
+            "${args[@]}"

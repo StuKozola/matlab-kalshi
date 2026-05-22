@@ -11,12 +11,21 @@ ticker = string(markets.markets{1}.ticker);
 ws = kalshi.WebSocketClient(config);
 cleanup = onCleanup(@() ws.close());
 ws.connect();
-ws.subscribe("orderbook_delta", MarketTickers=ticker);
+stream = kalshi.OrderbookStream();
+stream.subscribe(ws, ticker);
 
-for k = 1:5
-    event = ws.receiveEvent(Timeout=10);
-    if ~isempty(event)
-        fprintf("%s\n", event.Type);
-        disp(event.Data)
+book = stream.receiveBook(ws, ticker, Timeout=10);
+disp(book.yes)
+disp(book.no)
+
+for k = 1:20
+    message = ws.receive(Timeout=5);
+    if isempty(message)
+        continue
     end
+
+    stream.processMessage(message, WebSocketClient=ws);
+    book = stream.getBook(ticker);
+    fprintf("seq=%d yes_levels=%d no_levels=%d\n", ...
+        book.seq, height(book.yes), height(book.no));
 end
