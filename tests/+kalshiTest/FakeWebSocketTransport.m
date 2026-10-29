@@ -27,6 +27,11 @@ classdef FakeWebSocketTransport < handle
         end
 
         function message = receive(obj, ~)
+            if isempty(obj.Messages)
+                message = [];
+                return
+            end
+
             message = obj.Messages{1};
             obj.Messages(1) = [];
         end

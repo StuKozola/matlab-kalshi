@@ -5,6 +5,7 @@ classdef WebSocketClient < handle
         Config (1, 1) kalshi.Config
         Connected (1, 1) logical = false
         LastCommandId (1, 1) double = 0
+        LastRawMessage (1, 1) string = ""
     end
 
     properties
@@ -55,12 +56,17 @@ classdef WebSocketClient < handle
                 options.MarketTickers string = strings(0, 1)
                 options.MarketId (1, 1) string = ""
                 options.MarketIds string = strings(0, 1)
+                options.IndexIds string = strings(0, 1)
                 options.UseYesPrice (1, 1) logical = true
             end
 
             params = struct("channels", {cellstr(channels(:)')});
             params = addMarketSelectors(params, options.MarketTicker, options.MarketTickers, ...
                 options.MarketId, options.MarketIds);
+
+            if numel(options.IndexIds) > 0
+                params.index_ids = cellstr(options.IndexIds(:)');
+            end
 
             if any(channels(:) == "orderbook_delta")
                 params.use_yes_price = options.UseYesPrice;
@@ -133,8 +139,10 @@ classdef WebSocketClient < handle
             end
 
             if isstring(rawMessage) || ischar(rawMessage)
+                obj.LastRawMessage = string(rawMessage);
                 message = jsondecode(char(rawMessage));
             else
+                obj.LastRawMessage = string(jsonencode(rawMessage));
                 message = rawMessage;
             end
 

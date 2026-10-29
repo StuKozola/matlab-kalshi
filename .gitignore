@@ -8,3 +8,4 @@ __pycache__/
 *.mltbx
 build/
 release/
+data/

@@ -25,6 +25,30 @@ classdef tWebSocketClient < matlab.unittest.TestCase
             testCase.verifyFalse(isfield(transport.Sent{1}.params, "use_yes_price"));
         end
 
+        function testIndexSubscriptionCommand(testCase)
+            transport = kalshiTest.FakeWebSocketTransport();
+            ws = kalshi.WebSocketClient(kalshi.Config.demo(), Transport=transport);
+
+            ws.connect();
+            ws.subscribe("cfbenchmarks_value", IndexIds="BRTI");
+
+            params = transport.Sent{1}.params;
+            testCase.verifyEqual(string(params.channels{1}), "cfbenchmarks_value");
+            testCase.verifyEqual(string(params.index_ids{1}), "BRTI");
+            testCase.verifyFalse(isfield(params, "market_tickers"));
+        end
+
+        function testReceiveKeepsRawMessage(testCase)
+            rawText = "{""type"":""ticker"",""msg"":{""market_ticker"":""KXTEST""}}";
+            transport = kalshiTest.FakeWebSocketTransport(Messages={rawText});
+            ws = kalshi.WebSocketClient(kalshi.Config.demo(), Transport=transport);
+
+            ws.connect();
+            ws.receive(Timeout=1);
+
+            testCase.verifyEqual(ws.LastRawMessage, rawText);
+        end
+
         function testOrderbookSubscriptionUsesYesPrice(testCase)
             transport = kalshiTest.FakeWebSocketTransport();
             ws = kalshi.WebSocketClient(kalshi.Config.demo(), Transport=transport);

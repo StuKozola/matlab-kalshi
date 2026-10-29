@@ -6,6 +6,14 @@
 - Verify sequence progression across snapshots and deltas.
 - Exercise automatic snapshot resync behavior after sequence gaps.
 
+## Recorder
+
+- Run `kalshi.Recorder` against the live production feed and confirm the subscribe, `add_markets`/`delete_markets`, and `subscribed` message shapes it assumes.
+- Confirm the `cfbenchmarks_value` and `cfbenchmarks_value_5hz` channels deliver BRTI ticks for the account's entitlement.
+- Timestamp messages in the Python transport so `t_recv_ms` reflects arrival time, not processing time.
+- Add an analysis script that rebuilds books from the JSONL files and joins them to BRTI and settlement results.
+- `OrderbookStream` checks `seq` per ticker, but Kalshi counts `seq` per subscription; fix before using it with more than one market on a connection.
+
 ## Endpoint Coverage
 
 - Add table helpers for events and series.
